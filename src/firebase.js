@@ -1,20 +1,29 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+// Import the functions you need
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
+import { getAnalytics } from "firebase/analytics";
 
+// Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyB4Lz_RRCwOvsdxK3Q4xe2dePOGedbaFss",
-  authDomain: "report2clean.firebaseapp.com",
-  projectId: "report2clean",
-  storageBucket: "report2clean.appspot.com", 
-  messagingSenderId: "1035199650465",
-  appId: "1:1035199650465:web:d6280d0f92b9554e782ee0",
-  measurementId: "G-8WJ8Y1DGC0"
+  apiKey: "AIzaSyBZQbKuKmNioVYkghhWldIhTD-cqSK2TwE",
+  authDomain: "citysathi-e9e50.firebaseapp.com",
+  databaseURL: "https://citysathi-e9e50-default-rtdb.firebaseio.com",
+  projectId: "citysathi-e9e50",
+  storageBucket: "citysathi-e9e50.firebasestorage.app",
+  messagingSenderId: "858363067329",
+  appId: "1:858363067329:web:f8742be201d047a4b8cd40",
+  measurementId: "G-CC59M94L66"
 };
- 
-const app = initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+// Initialize Firebase services
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 export const storage = getStorage(app);
+
+export default app;

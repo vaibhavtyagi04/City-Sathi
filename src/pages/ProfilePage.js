@@ -1,9 +1,10 @@
+// ProfilePage.jsx
 import React, { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
-import "./ProfilePage.css"; 
-import { auth, db } from '../firebase';
+import "./ProfilePage.css";
+import { db, auth, storage } from "../firebase";
 import {
   FaUserCircle, FaEnvelope, FaMapMarkerAlt, FaPhoneAlt,
   FaSignOutAlt, FaFileAlt, FaUser, FaClock, FaCity, FaCheckCircle, FaHourglassHalf
@@ -13,6 +14,7 @@ import Navbar from '../components/Navbar';
 const ProfilePage = () => {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
+  const [counts, setCounts] = useState({ total: 0, resolved: 0, pending: 0 });
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -29,7 +31,30 @@ const ProfilePage = () => {
       }
     };
 
+    const fetchCounts = async () => {
+      try {
+        const q = query(collection(db, "reports"), where("userId", "==", user.uid));
+        const snapshot = await getDocs(q);
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        const isResolved = (r) => {
+          const s = (r?.status || '').toString().toLowerCase();
+          return s === 'resolved' || s === 'closed' || s === 'completed';
+        };
+
+        const total = docs.length;
+        const resolved = docs.filter(isResolved).length;
+        const pending = total - resolved;
+
+        setCounts({ total, resolved, pending });
+      } catch (err) {
+        console.error("Error fetching user reports:", err);
+        setCounts({ total: 0, resolved: 0, pending: 0 });
+      }
+    };
+
     fetchUserData();
+    fetchCounts();
   }, [user, navigate]);
 
   const handleLogout = async () => {
@@ -61,7 +86,7 @@ const ProfilePage = () => {
           <h2 style={styles.username}>{userData.fullName}</h2>
           <p style={styles.email}><FaEnvelope /> {user.email}</p>
           <p><FaPhoneAlt /> {userData.phone || 'Not provided'}</p>
-          <p><FaMapMarkerAlt /> {userData.city}, {userData.province}</p>
+          <p><FaMapMarkerAlt /> {userData.city || ''}, {userData.province || ''}</p>
 
           <button onClick={handleLogout} style={styles.logoutBtn}>
             <FaSignOutAlt style={{ marginRight: '6px' }} /> Logout
@@ -73,25 +98,37 @@ const ProfilePage = () => {
           <h3 style={styles.sectionTitle}><FaUser /> Profile Overview</h3>
 
           <div style={styles.infoRow}><strong>Name:</strong> {userData.fullName}</div>
-          <div style={styles.infoRow}><strong>Address:</strong> {userData.address}</div>
+          <div style={styles.infoRow}><strong>Address:</strong> {userData.address || "-"}</div>
           <div style={styles.infoRow}><strong>Phone:</strong> {userData.phone || 'Not provided'}</div>
-          <div style={styles.infoRow}><FaCity /> <strong>Province:</strong> {userData.province}</div>
-          <div style={styles.infoRow}><FaMapMarkerAlt /> <strong>City:</strong> {userData.city}</div>
-          <div style={styles.infoRow}><FaClock /> <strong>Joined on:</strong> {new Date(user.metadata.creationTime).toLocaleDateString()}</div>
+          <div style={styles.infoRow}><FaCity /> <strong>Province:</strong> {userData.province || "-"}</div>
+          <div style={styles.infoRow}><FaMapMarkerAlt /> <strong>City:</strong> {userData.city || "-"}</div>
+          <div style={styles.infoRow}><FaClock /> <strong>Joined on:</strong> {user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : "-"}</div>
 
           {/* Stats */}
           <div style={styles.statsContainer}>
-            <div style={styles.statCard}>
+            <div
+              style={{ ...styles.statCard, cursor: "pointer" }}
+              onClick={() => navigate("/reports", { state: { filter: "all" } })}
+              title="Click to view all reports"
+            >
               <FaFileAlt size={28} color="#2c7a7b" />
-              <p><strong>12</strong> Reports</p>
+              <p><strong>{counts.total}</strong> Reports</p>
             </div>
-            <div style={styles.statCard}>
+            <div
+              style={{ ...styles.statCard, cursor: "pointer" }}
+              onClick={() => navigate("/reports", { state: { filter: "resolved" } })}
+              title="Click to view resolved reports"
+            >
               <FaCheckCircle size={28} color="green" />
-              <p><strong>8</strong> Resolved</p>
+              <p><strong>{counts.resolved}</strong> Resolved</p>
             </div>
-            <div style={styles.statCard}>
+            <div
+              style={{ ...styles.statCard, cursor: "pointer" }}
+              onClick={() => navigate("/reports", { state: { filter: "pending" } })}
+              title="Click to view pending reports"
+            >
               <FaHourglassHalf size={28} color="orange" />
-              <p><strong>4</strong> Pending</p>
+              <p><strong>{counts.pending}</strong> Pending</p>
             </div>
           </div>
 
@@ -106,7 +143,7 @@ const ProfilePage = () => {
 
 export default ProfilePage;
 
-/* ---------- Styles ---------- */
+/* ---------- Styles (same as before) ---------- */
 const styles = {
   container: {
     fontFamily: 'Segoe UI, Arial, sans-serif',
