@@ -1,10 +1,9 @@
 // ViewReports.jsx
 import React, { useEffect, useState } from "react";
-import { query, collection, orderBy, getDocs, where } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { useNavigate, useLocation } from "react-router-dom";
 import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
-import { useNavigate, useLocation } from "react-router-dom";
+import { API_URL } from "../config";
 
 export default function ViewReports() {
   const [reports, setReports] = useState([]);
@@ -23,20 +22,19 @@ export default function ViewReports() {
 
   useEffect(() => {
     const fetchReports = async () => {
-      if (!auth.currentUser) {
+      const token = localStorage.getItem('token');
+      if (!token) {
         navigate("/login");
         return;
       }
 
       try {
-        const q = query(
-          collection(db, "reports"),
-          where("userId", "==", auth.currentUser.uid),
-          orderBy("timestamp", "desc")
-        );
-        const snapshot = await getDocs(q);
-        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setReports(docs);
+        const res = await fetch(`${API_URL}/reports/user`, {
+          headers: { 'x-auth-token': token }
+        });
+        if (!res.ok) throw new Error("Failed to load reports");
+        const data = await res.json();
+        setReports(data);
       } catch (err) {
         console.error("Error fetching reports:", err);
         setError("Failed to load reports. Please check permissions.");
@@ -86,12 +84,7 @@ export default function ViewReports() {
           alignItems: "center",
           flexWrap: "wrap"
         }}>
-           <button
-            onClick={() => setFilter("Report")}
-            className={`stat-btn ${filter === "Report" ? "active" : ""}`}
-          >
-          Report <strong style={{ marginLeft: 6 }}>{pendingCount}</strong>
-          </button>
+
           <button
             onClick={() => setFilter("all")}
             className={`stat-btn ${filter === "all" ? "active" : ""}`}
@@ -124,7 +117,7 @@ export default function ViewReports() {
         }}>
           {filteredReports.length > 0 ? (
             filteredReports.map((report) => (
-              <div key={report.id} className="report-card" style={{
+              <div key={report._id} className="report-card" style={{
                 background: "#fff",
                 borderRadius: 8,
                 boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -134,9 +127,13 @@ export default function ViewReports() {
               }}>
                 {report.imageUrl ? (
                   <img
-                    src={report.imageUrl}
+                    src={report.imageUrl.startsWith('http') ? report.imageUrl : `${API_URL.replace('/api', '')}${report.imageUrl}`}
                     alt="issue"
                     style={{ width: "100%", height: 160, objectFit: "cover" }}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://via.placeholder.com/300?text=Image+Not+Found";
+                    }}
                   />
                 ) : (
                   <div style={{
@@ -155,12 +152,12 @@ export default function ViewReports() {
                   </p>
                   <p style={{ margin: 0 }}>
                     <strong>📍</strong>{" "}
-                    {report.location?.address || report.location?.lat && report.location?.lng
+                    {report.location?.address || (report.location?.lat && report.location?.lng)
                       ? `${report.location?.lat}, ${report.location?.lng}`
                       : "Location not set"}
                   </p>
                   <p style={{ margin: "8px 0 0 0", color: "#555", fontSize: 13 }}>
-                    <small>🕒 {report.timestamp ? report.timestamp.toDate().toLocaleString() : "No time recorded"}</small>
+                    <small>🕒 {report.timestamp ? new Date(report.timestamp).toLocaleString() : "No time recorded"}</small>
                     {" • "}
                     <small>Status: <strong>{report.status || "pending"}</strong></small>
                   </p>

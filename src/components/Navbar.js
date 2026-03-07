@@ -1,8 +1,22 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import './Navbar.css';
+import Notifications from './Notifications';
+
+import { jwtDecode } from "jwt-decode";
 
 function Navbar() {
+  let isAdmin = false;
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      isAdmin = decoded.user.role === 'admin';
+    }
+  } catch (error) {
+    // Invalid token
+  }
+
   return (
     <nav className="navbar">
       {/* Left Logo */}
@@ -15,11 +29,14 @@ function Navbar() {
         <Link to="/report">Submit Report</Link>
         <Link to="/reports">View Reports</Link>
         <Link to="/about">About</Link>
-
+        <Link to="/about">About</Link>
+        {isAdmin && <Link to="/admin" className="admin-link">Admin Dashboard</Link>}
       </div>
 
-      {/* Right Profile Button */}
-      <Link to="/profile" className="profile-btn">Profile</Link>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        {isAdmin || localStorage.getItem('token') ? <Notifications /> : null}
+        <Link to="/profile" className="profile-btn">Profile</Link>
+      </div>
     </nav>
   );
 }

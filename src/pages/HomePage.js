@@ -1,7 +1,8 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import { Link } from 'react-router-dom';
-import './HomePage.css'; 
+import './HomePage.css';
+import LiveMap from '../components/LiveMap';
 
 function HomePage() {
   return (
@@ -11,22 +12,22 @@ function HomePage() {
 
       {/* Hero Section */}
       <section className="hero-section">
-  <div className="hero-overlay">
-    <h1 className="hero-title">
-      Make Your City <span>Cleaner & Smarter</span>
-    </h1>
-    <p className="hero-subtitle">
-      CitySathi empowers citizens to take action by reporting local issues like 
-      <strong> potholes, broken streetlights, stray animals, drainage problems, and garbage collection </strong>.
-      Track progress, stay updated, and be part of the solution for a better tomorrow. 🌍
-    </p>
+        <div className="hero-overlay">
+          <h1 className="hero-title">
+            Make Your City <span>Cleaner & Smarter</span>
+          </h1>
+          <p className="hero-subtitle">
+            CitySathi empowers citizens to take action by reporting local issues like
+            <strong> potholes, broken streetlights, stray animals, drainage problems, and garbage collection </strong>.
+            Track progress, stay updated, and be part of the solution for a better tomorrow. 🌍
+          </p>
 
-    <div className="hero-buttons">
-      <Link to="/report" className="btn-primary">🚀 Get Started</Link>
-      <Link to="/about" className="btn-outline">📖 Learn More</Link>
-    </div>
-  </div>
-</section>
+          <div className="hero-buttons">
+            <Link to="/report" className="btn-primary">🚀 Get Started</Link>
+            <Link to="/about" className="btn-outline">📖 Learn More</Link>
+          </div>
+        </div>
+      </section>
 
 
       {/* Features Section */}
@@ -52,15 +53,7 @@ function HomePage() {
       <section className="map-section">
         <h3>Live Report Map</h3>
         <div className="map-container">
-          <iframe
-            title="AKGEC Map"
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d14015.69078016602!2d77.44327355!3d28.6758956!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390cf1aabaf5f4b5%3A0x69f5a12e1982cf9e!2sAjay%20Kumar%20Garg%20Engineering%20College%2C%20Ghaziabad!5e0!3m2!1sen!2sin!4v1693910485678!5m2!1sen!2sin"
-            width="100%"
-            height="400"
-            style={{ border: 0 }}
-            allowFullScreen=""
-            loading="lazy"
-          />
+          <LiveMap />
         </div>
       </section>
 

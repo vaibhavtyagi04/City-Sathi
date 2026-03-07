@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /reports/{reportId} {
+      // Users can read their own reports
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // Users can create reports if they assign it to themselves
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own reports (optional, depending on requirements)
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

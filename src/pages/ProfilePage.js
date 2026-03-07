@@ -1,66 +1,84 @@
-// ProfilePage.jsx
 import React, { useEffect, useState } from 'react';
-import { signOut } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import "./ProfilePage.css";
-import { db, auth, storage } from "../firebase";
 import {
   FaUserCircle, FaEnvelope, FaMapMarkerAlt, FaPhoneAlt,
   FaSignOutAlt, FaFileAlt, FaUser, FaClock, FaCity, FaCheckCircle, FaHourglassHalf
 } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
+import { API_URL } from '../config';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
+  const [error, setError] = useState("");
   const [counts, setCounts] = useState({ total: 0, resolved: 0, pending: 0 });
-  const user = auth.currentUser;
 
   useEffect(() => {
-    if (!user) {
-      navigate('/register');
-      return;
-    }
-
-    const fetchUserData = async () => {
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        setUserData(userSnap.data());
+    const fetchProfile = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
       }
-    };
 
-    const fetchCounts = async () => {
       try {
-        const q = query(collection(db, "reports"), where("userId", "==", user.uid));
-        const snapshot = await getDocs(q);
-        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Fetch User Data
+        const userRes = await fetch(`${API_URL}/auth/me`, {
+          headers: { 'x-auth-token': token }
+        });
+        if (!userRes.ok) {
+          // If user check fails, token is likely invalid
+          throw new Error('Failed to load profile');
+        }
+        const user = await userRes.json();
+        setUserData(user);
 
-        const isResolved = (r) => {
-          const s = (r?.status || '').toString().toLowerCase();
-          return s === 'resolved' || s === 'closed' || s === 'completed';
-        };
+        // Fetch Reports (fail gracefully)
+        try {
+          const reportsRes = await fetch(`${API_URL}/reports/user`, {
+            headers: { 'x-auth-token': token }
+          });
+          if (reportsRes.ok) {
+            const reports = await reportsRes.json();
 
-        const total = docs.length;
-        const resolved = docs.filter(isResolved).length;
-        const pending = total - resolved;
+            const total = reports.length;
+            const resolved = reports.filter(r =>
+              ['resolved', 'closed', 'completed'].includes((r.status || '').toLowerCase())
+            ).length;
+            const pending = total - resolved;
 
-        setCounts({ total, resolved, pending });
+            setCounts({ total, resolved, pending });
+          }
+        } catch (reportErr) {
+          console.error("Failed to load reports:", reportErr);
+          // Do not clear token or navigate away just because reports failed
+        }
+
       } catch (err) {
-        console.error("Error fetching user reports:", err);
-        setCounts({ total: 0, resolved: 0, pending: 0 });
+        console.error(err);
+        setError("Session expired or invalid. Please login again.");
+        localStorage.removeItem('token');
+        navigate('/login');
       }
     };
 
-    fetchUserData();
-    fetchCounts();
-  }, [user, navigate]);
+    fetchProfile();
+  }, [navigate]);
 
-  const handleLogout = async () => {
-    await signOut(auth);
+  const handleLogout = () => {
+    localStorage.removeItem('token');
     navigate('/login');
   };
+
+  if (error) {
+    return (
+      <div style={styles.loading}>
+        <p style={{ color: 'red' }}>{error}</p>
+        <button onClick={() => window.location.reload()} style={styles.logoutBtn}>Retry</button>
+      </div>
+    );
+  }
 
   if (!userData) {
     return <div style={styles.loading}>Loading profile...</div>;
@@ -84,7 +102,7 @@ const ProfilePage = () => {
         <div style={styles.left}>
           <FaUserCircle size={100} color="#2c7a7b" />
           <h2 style={styles.username}>{userData.fullName}</h2>
-          <p style={styles.email}><FaEnvelope /> {user.email}</p>
+          <p style={styles.email}><FaEnvelope /> {userData.email}</p>
           <p><FaPhoneAlt /> {userData.phone || 'Not provided'}</p>
           <p><FaMapMarkerAlt /> {userData.city || ''}, {userData.province || ''}</p>
 
@@ -102,7 +120,7 @@ const ProfilePage = () => {
           <div style={styles.infoRow}><strong>Phone:</strong> {userData.phone || 'Not provided'}</div>
           <div style={styles.infoRow}><FaCity /> <strong>Province:</strong> {userData.province || "-"}</div>
           <div style={styles.infoRow}><FaMapMarkerAlt /> <strong>City:</strong> {userData.city || "-"}</div>
-          <div style={styles.infoRow}><FaClock /> <strong>Joined on:</strong> {user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : "-"}</div>
+          <div style={styles.infoRow}><FaClock /> <strong>Joined on:</strong> {userData.createdAt ? new Date(userData.createdAt).toLocaleDateString() : "-"}</div>
 
           {/* Stats */}
           <div style={styles.statsContainer}>

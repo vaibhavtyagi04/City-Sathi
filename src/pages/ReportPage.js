@@ -1,20 +1,22 @@
-// ReportPage.jsx
 import React, { useState, useEffect } from "react";
-import { db, auth, storage } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { useNavigate } from "react-router-dom";
 import {
-  FiCamera,
   FiCheckCircle,
   FiMapPin,
   FiLoader,
   FiUploadCloud,
+  FiCamera,
+  FiX
 } from "react-icons/fi";
+import Webcam from "react-webcam";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import "./ReportPage.css";
 import report from "../assets/report.jpg";
+import { API_URL } from "../config";
+
+const ADD_WATERMARK = true; // Feature flag
+
 const CATEGORIES = [
   { key: "garbage", label: "Garbage" },
   { key: "stray_animal", label: "Stray Animal" },
@@ -38,7 +40,30 @@ export default function ReportPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Auto-detect location + reverse geocode via OpenStreetMap's Nominatim
+  // Camera State
+  const [showCamera, setShowCamera] = useState(false);
+  const webcamRef = React.useRef(null);
+
+  const capture = React.useCallback(() => {
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (imageSrc) {
+      fetch(imageSrc)
+        .then(res => res.blob())
+        .then(async blob => {
+          const file = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
+
+          // Apply watermark
+          const watermarkedFile = await addWatermark(file, location, address);
+
+          setImage(watermarkedFile);
+          setImagePreview(URL.createObjectURL(watermarkedFile));
+          setShowCamera(false);
+          setError("");
+        });
+    }
+  }, [webcamRef]);
+
+  // Auto-detect location
   useEffect(() => {
     if (!navigator.geolocation) {
       setLocationEnabled(false);
@@ -77,16 +102,129 @@ export default function ReportPage() {
       setError("Only JPG/PNG images allowed.");
       return;
     }
-    if (file.size > 6 * 1024 * 1024) {
-      setError("Image must be under 6 MB.");
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit on server
+      setError("Image must be under 10 MB.");
       return;
     }
-    setImage(file);
-    setImagePreview(URL.createObjectURL(file));
-    setError("");
+    const processFile = async () => {
+      try {
+        const watermarkedFile = await addWatermark(file, location, address);
+        setImage(watermarkedFile);
+        setImagePreview(URL.createObjectURL(watermarkedFile));
+        setError("");
+      } catch (err) {
+        console.error("Watermark error:", err);
+        setError("Error processing image.");
+      }
+    };
+
+    processFile();
   };
 
-  // Allow simple drag & drop into the label area
+  const addWatermark = (file, loc, addr) => {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject("No file");
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+
+      img.onload = () => {
+        console.log("Watermark: Image loaded, dimensions:", img.width, img.height);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw original
+        ctx.drawImage(img, 0, 0);
+
+        // Watermark Config
+        const fontSize = Math.max(24, Math.floor(canvas.width * 0.03));
+        const lineHeight = fontSize * 1.3;
+        const padding = fontSize;
+
+        // Calculate text
+        const dateStr = new Date().toLocaleString();
+        const locStr = loc ? `Lat: ${loc.lat.toFixed(5)}, Lng: ${loc.lng.toFixed(5)}` : "Location: Not detected";
+        const addrStr = addr || "Address: Not detected";
+
+        // Prepare lines (bottom-up)
+        const lines = [dateStr, locStr];
+
+        // Wrap address simple
+        const maxTextWidth = canvas.width - (padding * 2);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+
+        // Split address into lines if needed
+        const words = addrStr.split(' ');
+        let currentLine = '';
+        const addrLines = [];
+
+        words.forEach(word => {
+          const testLine = currentLine + word + ' ';
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxTextWidth && currentLine !== '') {
+            addrLines.push(currentLine);
+            currentLine = word + ' ';
+          } else {
+            currentLine = testLine;
+          }
+        });
+        addrLines.push(currentLine);
+
+        // Add address lines (reversed for bottom-up drawing logic)
+        // Actually easier to just concat all lines and draw background based on total height
+        const allLines = [...addrLines, ...lines]; // Address first, then coords, then date
+
+        const totalTextHeight = allLines.length * lineHeight + padding;
+
+        // Draw Background Overlay
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, canvas.height - totalTextHeight - padding, canvas.width, totalTextHeight + padding);
+
+        // Draw Text
+        ctx.fillStyle = "#fff";
+        ctx.textBaseline = "bottom";
+
+        let y = canvas.height - padding;
+
+        // Draw date (last item)
+        ctx.fillText(dateStr, padding, y);
+        y -= lineHeight;
+
+        // Draw coords
+        ctx.fillText(locStr, padding, y);
+        y -= lineHeight;
+
+        // Draw address lines (bottom-up)
+        for (let i = addrLines.length - 1; i >= 0; i--) {
+          ctx.fillText(addrLines[i], padding, y);
+          y -= lineHeight;
+        }
+
+        canvas.toBlob(blob => {
+          if (blob) {
+            const newFile = new File([blob], file.name, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(newFile);
+          } else {
+            reject("Canvas to Blob failed");
+          }
+          URL.revokeObjectURL(objectUrl);
+        }, "image/jpeg", 0.95);
+      };
+
+      img.onerror = (e) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(e);
+      };
+    });
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
@@ -102,10 +240,12 @@ export default function ReportPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!auth.currentUser) {
+    const token = localStorage.getItem('token');
+    if (!token) {
       navigate("/login");
       return;
     }
+
     if (!description.trim()) {
       setError("Please add a description.");
       return;
@@ -121,60 +261,45 @@ export default function ReportPage() {
 
     setSubmitting(true);
     setError("");
-    setUploadProgress(0);
+    // Multer upload is one-shot, fake progress or just wait
+    setUploadProgress(50);
 
     try {
-      // Upload image with resumable upload to monitor progress
-      const imageRef = ref(storage, `reports/${Date.now()}_${image.name}`);
-      const uploadTask = uploadBytesResumable(imageRef, image);
+      const formData = new FormData();
+      formData.append('image', image);
+      formData.append('category', category);
+      formData.append('description', description);
+      formData.append('location', JSON.stringify({
+        lat: location?.lat,
+        lng: location?.lng,
+        address: address,
+      }));
 
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const percent =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(Math.round(percent));
+      const res = await fetch(`${API_URL}/reports`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': token
         },
-        (uploadErr) => {
-          console.error("Upload error:", uploadErr);
-          setError("Image upload failed.");
-          setSubmitting(false);
-        },
-        async () => {
-          const imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+        body: formData
+      });
 
-          // Save report doc
-          await addDoc(collection(db, "reports"), {
-            userId: auth.currentUser.uid,
-            description: description.trim(),
-            category,
-            imageUrl,
-            location: {
-              lat: location?.lat || null,
-              lng: location?.lng || null,
-              address: address || null,
-            },
-            timestamp: serverTimestamp(),
-          });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.msg || 'Failed to submit report');
+      }
 
-          setSuccess(true);
-          setUploadingFinish();
-        }
-      );
+      setUploadProgress(100);
+      setSuccess(true);
+      setTimeout(() => {
+        navigate("/reports");
+      }, 1500);
+
     } catch (err) {
       console.error("Submit error:", err);
-      setError("Failed to submit report.");
+      setError("Failed to submit report. " + err.message);
       setSubmitting(false);
+      setUploadProgress(0);
     }
-  };
-
-  const setUploadingFinish = () => {
-    setSubmitting(false);
-    setUploadProgress(100);
-    setTimeout(() => {
-      // reset or navigate
-      navigate("/reportssection");
-    }, 1500);
   };
 
   return (
@@ -185,13 +310,13 @@ export default function ReportPage() {
            backgroundImage: `url("/bg-city.jpg")`
       */}
       <div
-     style={{
-    backgroundImage: `url(${report})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-    height: "100vh",
-  }}
+        style={{
+          backgroundImage: `url(${report})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          height: "100vh",
+        }}
       >
         <div className="report-container">
           <h2 className="report-heading">🧹 Report an Issue</h2>
@@ -203,9 +328,8 @@ export default function ReportPage() {
                 <button
                   type="button"
                   key={c.key}
-                  className={`category-chip ${
-                    category === c.key ? "active" : ""
-                  }`}
+                  className={`category-chip ${category === c.key ? "active" : ""
+                    }`}
                   onClick={() => setCategory(c.key)}
                 >
                   {c.label}
@@ -254,31 +378,98 @@ export default function ReportPage() {
             )}
 
             {/* IMAGE UPLOAD (click or drag-drop) */}
-            <label
-              className="upload-box"
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-            >
-              <FiUploadCloud size={22} />
-              <div>
-                <div className="upload-text">
-                  {image ? "Change Photo" : "Click or drop image here"}
+            {/* IMAGE UPLOAD (click or drag-drop) */}
+            <div className="upload-actions" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <label
+                className="upload-box"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                style={{ flex: 1 }}
+              >
+                <FiUploadCloud size={22} />
+                <div>
+                  <div className="upload-text">
+                    {image ? "Change Photo" : "Upload File"}
+                  </div>
+                  <div className="upload-subtext">
+                    JPG / PNG · Max 6 MB
+                  </div>
                 </div>
-                <div className="upload-subtext">
-                  JPG / PNG · Max 6 MB · Photo showing the issue clearly
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: "none" }}
+                />
+              </label>
+
+              <button
+                type="button"
+                className="camera-btn"
+                onClick={() => setShowCamera(true)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', border: '2px dashed #cbd5e0', borderRadius: '8px', cursor: 'pointer', color: '#4a5568' }}
+              >
+                <FiCamera size={22} />
+                <span style={{ fontWeight: '600', marginTop: '5px' }}>Take Photo</span>
+              </button>
+            </div>
+
+            {/* CAMERA MODAL */}
+            {showCamera && (
+              <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'relative', background: '#000', padding: '10px', borderRadius: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCamera(false)}
+                    style={{ position: 'absolute', top: '-40px', right: '0', background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
+                  >
+                    <FiX />
+                  </button>
+                  <Webcam
+                    audio={false}
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    videoConstraints={{ facingMode: "environment" }}
+                    style={{ width: '100%', maxWidth: '500px', borderRadius: '8px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={capture}
+                    style={{ width: '100%', padding: '12px', marginTop: '10px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    <FiCamera style={{ marginRight: '5px' }} /> Capture
+                  </button>
                 </div>
               </div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                style={{ display: "none" }}
-              />
-            </label>
+            )}
 
             {imagePreview && (
-              <div className="preview-wrap">
+              <div className="preview-wrap" style={{ position: 'relative' }}>
                 <img src={imagePreview} alt="preview" className="preview-image" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImage(null);
+                    setImagePreview(null);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <FiX />
+                </button>
               </div>
             )}
 

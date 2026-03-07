@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, auth, storage } from "../firebase";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
 import Navbar from '../components/Navbar';
+// Firebase imports removed
+import { API_URL } from '../config';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import FacebookLogin from '@greatsumini/react-facebook-login';
+
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"; // Replace with actual ID
+const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID"; // Replace with actual ID
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -22,35 +26,38 @@ const RegisterPage = () => {
   const [districts, setDistricts] = useState([]);
   const [cities, setCities] = useState([]);
 
-  const states = ["Uttar Pradesh", "Maharashtra", "Delhi", "Karnataka", "Tamil Nadu"]; 
+  const states = ["Uttar Pradesh", "Maharashtra", "Delhi", "Karnataka", "Tamil Nadu"];
   const stateDistrictCityData = {
-    "Uttar Pradesh": { districts:{
-      Agra: ["Agra City", "Fatehabad"],
-      Aligarh: ["Aligarh City", "Khair"],
-      Mathura: ["Mathura City", "Vrindavan"],
-      Bareilly: ["Bareilly City", "Aonla"],
-      Moradabad: ["Moradabad City", "Thakurdwara"],
-      Gorakhpur: ["Gorakhpur City", "Sadar"],
-      Lucknow: ["Lucknow City", "Alambagh"],
-      Varanasi: ["Varanasi City", "Sarnath"],
-      Kanpur: ["Kanpur City", "Kalyanpur"],
-      Jhansi: ["Jhansi City", "Tehri"],
-      Saharanpur: ["Saharanpur City", "Nakud"],
-      Mathura: ["Mathura City", "Chhata"],
-      Etawah: ["Etawah City", "Bharthana"],
-      Firozabad: ["Firozabad City", "Shikohabad"],
-      Rampur: ["Rampur City", "Bilaspur"],
-      Shahjahanpur: ["Shahjahanpur City", "Tilhar"],
-      Sitapur: ["Sitapur City", "Misrikh"],
-      Deoria: ["Deoria City", "Bhatpar Rani"],
-      Hapur: ["Hapur"],
-      Sambhal: ["Sambhal City", "Chandausi"],
-      Meerut: ["Meerut City", "Modipuram"],
-      Bulandshahr: ["Bulandshahr City", "Siana"],
-      Jaunpur: ["Jaunpur City", "Shahganj"],
-      Mirzapur: ["Mirzapur City", "Chunar"],
-      Badaun: ["Badun City", "Kachhla"],
-      Ghaziabad: ["Ghaziabad City", "Loni"] } },
+    "Uttar Pradesh": {
+      districts: {
+        Agra: ["Agra City", "Fatehabad"],
+        Aligarh: ["Aligarh City", "Khair"],
+        Mathura: ["Mathura City", "Vrindavan"],
+        Bareilly: ["Bareilly City", "Aonla"],
+        Moradabad: ["Moradabad City", "Thakurdwara"],
+        Gorakhpur: ["Gorakhpur City", "Sadar"],
+        Lucknow: ["Lucknow City", "Alambagh"],
+        Varanasi: ["Varanasi City", "Sarnath"],
+        Kanpur: ["Kanpur City", "Kalyanpur"],
+        Jhansi: ["Jhansi City", "Tehri"],
+        Saharanpur: ["Saharanpur City", "Nakud"],
+        Mathura: ["Mathura City", "Chhata"],
+        Etawah: ["Etawah City", "Bharthana"],
+        Firozabad: ["Firozabad City", "Shikohabad"],
+        Rampur: ["Rampur City", "Bilaspur"],
+        Shahjahanpur: ["Shahjahanpur City", "Tilhar"],
+        Sitapur: ["Sitapur City", "Misrikh"],
+        Deoria: ["Deoria City", "Bhatpar Rani"],
+        Hapur: ["Hapur"],
+        Sambhal: ["Sambhal City", "Chandausi"],
+        Meerut: ["Meerut City", "Modipuram"],
+        Bulandshahr: ["Bulandshahr City", "Siana"],
+        Jaunpur: ["Jaunpur City", "Shahganj"],
+        Mirzapur: ["Mirzapur City", "Chunar"],
+        Badaun: ["Badun City", "Kachhla"],
+        Ghaziabad: ["Ghaziabad City", "Loni"]
+      }
+    },
     "Maharashtra": { districts: { Mumbai: ["Andheri", "Borivali", "Dadar"] } },
     "Delhi": { districts: { "New Delhi": ["Connaught Place", "Karol Bagh"] } },
     "Karnataka": { districts: { Bengaluru: ["Whitefield", "Koramangala"] } },
@@ -58,6 +65,30 @@ const RegisterPage = () => {
   };
 
   const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSocialSuccess = async (provider, data) => {
+    try {
+      const endpoint = provider === 'google' ? '/auth/google' : '/auth/facebook';
+      const body = provider === 'google'
+        ? { token: data.credential }
+        : { accessToken: data.accessToken, userID: data.userID };
+
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.msg || 'Social registration failed');
+
+      localStorage.setItem('token', result.token);
+      navigate('/profile');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleStateChange = (state) => {
     setFormData((prev) => ({ ...prev, state, district: "", city: "" }));
     setDistricts(Object.keys(stateDistrictCityData[state]?.districts || {}));
@@ -82,26 +113,33 @@ const RegisterPage = () => {
       setError("Passwords do not match.");
       return;
     }
+
     try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      await setDoc(doc(db, "users", res.user.uid), { fullName, email, phone, state, district, city, address, createdAt: new Date() });
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.msg || 'Registration failed');
+      }
+
+      localStorage.setItem('token', data.token);
       navigate("/profile");
     } catch (err) {
-      setError("Registration failed. Try again.");
       console.error(err);
+      if (err.message === 'Failed to fetch') {
+        setError("Cannot connect to server. Is the backend running?");
+      } else {
+        setError(err.message);
+      }
     }
   };
 
   const handleSocialLogin = async (provider) => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      await setDoc(doc(db, "users", user.uid), { fullName: user.displayName || "", email: user.email, phone: user.phoneNumber || "", state: "", district: "", city: "", address: "", createdAt: new Date() });
-      navigate("/profile");
-    } catch (err) {
-      console.error("Social login failed", err);
-      setError("Social login failed.");
-    }
+    setError("Social login not supported in this version yet.");
   };
 
   return (
@@ -114,17 +152,17 @@ const RegisterPage = () => {
             <input type="text" name="fullName" placeholder="Full Name" onChange={handleChange} />
             <input type="email" name="email" placeholder="Email Address" onChange={handleChange} />
             <input type="tel" name="phone" placeholder="Phone Number" onChange={handleChange} />
-            
+
             <select name="state" value={formData.state} onChange={(e) => handleStateChange(e.target.value)}>
               <option value="">Select State</option>
               {states.map((state, index) => <option key={index} value={state}>{state}</option>)}
             </select>
-            
+
             <select name="district" value={formData.district} onChange={(e) => handleDistrictChange(e.target.value)} disabled={!formData.state}>
               <option value="">Select District</option>
               {districts.map((district, index) => <option key={index} value={district}>{district}</option>)}
             </select>
-            
+
             <select name="city" value={formData.city} onChange={handleChange} disabled={!formData.district}>
               <option value="">Select City</option>
               {cities.map((city, index) => <option key={index} value={city}>{city}</option>)}
@@ -138,12 +176,38 @@ const RegisterPage = () => {
 
           <div className="social-login">
             <p>Or Sign Up Using</p>
-            <button className="google-btn" onClick={() => handleSocialLogin(new GoogleAuthProvider())}>
-              <img src="https://img.icons8.com/color/16/google-logo.png" alt="Google" /> Google
-            </button>
-            <button className="facebook-btn" onClick={() => handleSocialLogin(new FacebookAuthProvider())}>
-              <img src="https://img.icons8.com/ios-filled/16/ffffff/facebook--v1.png" alt="Facebook" /> Facebook
-            </button>
+            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+              <GoogleLogin
+                onSuccess={credentialResponse => handleSocialSuccess('google', credentialResponse)}
+                onError={() => setError('Google Registration Failed')}
+                useOneTap
+              />
+            </GoogleOAuthProvider>
+
+            <div style={{ marginTop: 10 }}>
+              <FacebookLogin
+                appId={FACEBOOK_APP_ID}
+                onSuccess={(response) => {
+                  handleSocialSuccess('facebook', response);
+                }}
+                onFail={(error) => {
+                  console.log('Registration Failed!', error);
+                  setError('Facebook Registration Failed');
+                }}
+                style={{
+                  backgroundColor: '#4267b2',
+                  color: '#fff',
+                  fontSize: '16px',
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                Register with Facebook
+              </FacebookLogin>
+            </div>
           </div>
 
           {error && <p className="error">{error}</p>}

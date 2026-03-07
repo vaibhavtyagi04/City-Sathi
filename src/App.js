@@ -7,6 +7,8 @@ import ReportsSection from './pages/ReportsSection';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import About from './pages/About';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminRoute from './components/AdminRoute';
 
 function App() {
   return (
@@ -18,7 +20,15 @@ function App() {
         <Route path="/reports" element={<ReportsSection />} />
         <Route path="/register" element={<RegisterPage />} /> {/* Register route */}
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path='/about' element={<About/>} />
+        <Route path='/about' element={<About />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
       </Routes>
     </Router>
   );

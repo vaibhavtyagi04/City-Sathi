@@ -1,10 +1,83 @@
 import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
-import { FaGoogle, FaFacebookF, FaGithub, FaInstagram, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import loginbg from '../assets/log.jpg';
+import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import FacebookLogin from '@greatsumini/react-facebook-login';
+
+const GOOGLE_CLIENT_ID = "704438813882-r2nieunde5dd2dovpnjkpmg0q7r4evii.apps.googleusercontent.com"; // Replace with actual ID
+const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID"; // Replace with actual ID
 
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const handleSocialSuccess = async (provider, data) => {
+    try {
+      const endpoint = provider === 'google' ? '/auth/google' : '/auth/facebook';
+      const body = provider === 'google'
+        ? { token: data.credential }
+        : { accessToken: data.accessToken, userID: data.userID };
+
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.msg || 'Social login failed');
+
+      localStorage.setItem('token', result.token);
+      navigate('/profile');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.msg || 'Login failed');
+      }
+
+      localStorage.setItem('token', data.token);
+
+      if (isAdminLogin) {
+        if (data.user?.role === 'admin') {
+          navigate('/admin');
+        } else {
+          setError('Access Denied: You do not have admin privileges.');
+          localStorage.removeItem('token');
+        }
+      } else {
+        navigate('/profile');
+      }
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        setError("Cannot connect to server. Is the backend running?");
+      } else {
+        setError(err.message);
+      }
+    }
+  };
 
   return (
     <>
@@ -16,33 +89,63 @@ const LoginPage = () => {
 
           {/* Social Login Buttons */}
           <div style={styles.socialButtons}>
-            <button style={{ ...styles.socialBtn, backgroundColor: '#4285F4' }}>
-              <FaGoogle style={styles.icon} /> Sign in with Google
-            </button>
-            <button style={{ ...styles.socialBtn, backgroundColor: '#3b5998' }}>
-              <FaFacebookF style={styles.icon} /> Sign in with Facebook
-            </button>
-            <button style={{ ...styles.socialBtn, backgroundColor: '#333' }}>
-              <FaGithub style={styles.icon} /> Sign in with GitHub
-            </button>
-            <button style={{ ...styles.socialBtn, backgroundColor: '#e4405f' }}>
-              <FaInstagram style={styles.icon} /> Sign in with Instagram
-            </button>
+            <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+              <GoogleLogin
+                onSuccess={credentialResponse => handleSocialSuccess('google', credentialResponse)}
+                onError={() => setError('Google Login Failed')}
+                useOneTap
+              />
+            </GoogleOAuthProvider>
+
+            <div style={{ marginTop: 10 }}>
+              <FacebookLogin
+                appId={FACEBOOK_APP_ID}
+                onSuccess={(response) => {
+                  handleSocialSuccess('facebook', response);
+                }}
+                onFail={(error) => {
+                  console.log('Login Failed!', error);
+                  setError('Facebook Login Failed');
+                }}
+                style={{
+                  backgroundColor: '#4267b2',
+                  color: '#fff',
+                  fontSize: '16px',
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                Login with Facebook
+              </FacebookLogin>
+            </div>
           </div>
 
           <div style={styles.divider}><span>OR</span></div>
 
           {/* Login Form */}
-          <form style={styles.form}>
+          <form style={styles.form} onSubmit={handleSubmit}>
             <label>Email</label>
-            <input type="email" placeholder="Enter email" style={styles.input} />
+            <input
+              type="email"
+              name="email"
+              placeholder="Enter email"
+              style={styles.input}
+              onChange={handleChange}
+              required
+            />
 
             <label>Password</label>
             <div style={styles.passwordWrapper}>
               <input
                 type={showPassword ? "text" : "password"}
+                name="password"
                 placeholder="Enter password"
                 style={styles.input}
+                onChange={handleChange}
+                required
               />
               <span
                 onClick={() => setShowPassword(!showPassword)}
@@ -51,6 +154,21 @@ const LoginPage = () => {
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </span>
             </div>
+
+            {/* Admin Login Toggle */}
+            <div style={{ marginBottom: 15, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+                <input
+                  type="checkbox"
+                  checked={isAdminLogin}
+                  onChange={(e) => setIsAdminLogin(e.target.checked)}
+                  style={{ marginRight: 8 }}
+                />
+                Login as Admin
+              </label>
+            </div>
+
+            {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
 
             <div style={styles.optionsRow}>
               <label>
