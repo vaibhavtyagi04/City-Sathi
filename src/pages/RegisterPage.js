@@ -6,7 +6,7 @@ import { API_URL } from '../config';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import FacebookLogin from '@greatsumini/react-facebook-login';
 
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"; // Replace with actual ID
+const GOOGLE_CLIENT_ID = "704438813882-r2nieunde5dd2dovpnjkpmg0q7r4evii.apps.googleusercontent.com"; // Replace with actual ID
 const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID"; // Replace with actual ID
 
 const RegisterPage = () => {
@@ -224,8 +224,8 @@ const RegisterPage = () => {
           padding: 20px;
         }
         .register-container {
+          width: 90%;
           max-width: 500px;
-          width: 100%;
           background: rgba(255, 255, 255, 0.95);
           padding: 30px;
           border-radius: 15px;

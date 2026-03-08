@@ -213,10 +213,10 @@ const styles = {
   loginBox: {
     background: 'rgba(255,255,255,0.15)',
     backdropFilter: 'blur(12px)',
-    padding: '40px',
+    padding: '30px',
     borderRadius: '16px',
     boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
-    width: '100%',
+    width: '90%',
     maxWidth: '400px',
     textAlign: 'center',
     zIndex: 2,
