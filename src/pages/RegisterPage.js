@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-// Firebase imports removed
 import { API_URL } from '../config';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import FacebookLogin from '@greatsumini/react-facebook-login';
+import { toast } from 'react-toastify';
 
 const GOOGLE_CLIENT_ID = "704438813882-r2nieunde5dd2dovpnjkpmg0q7r4evii.apps.googleusercontent.com"; // Replace with actual ID
 const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID"; // Replace with actual ID
@@ -22,7 +22,7 @@ const RegisterPage = () => {
     address: "",
     phone: "",
   });
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [districts, setDistricts] = useState([]);
   const [cities, setCities] = useState([]);
 
@@ -41,7 +41,6 @@ const RegisterPage = () => {
         Kanpur: ["Kanpur City", "Kalyanpur"],
         Jhansi: ["Jhansi City", "Tehri"],
         Saharanpur: ["Saharanpur City", "Nakud"],
-        Mathura: ["Mathura City", "Chhata"],
         Etawah: ["Etawah City", "Bharthana"],
         Firozabad: ["Firozabad City", "Shikohabad"],
         Rampur: ["Rampur City", "Bilaspur"],
@@ -83,9 +82,10 @@ const RegisterPage = () => {
       if (!res.ok) throw new Error(result.msg || 'Social registration failed');
 
       localStorage.setItem('token', result.token);
+      toast.success('Registration successful!');
       navigate('/profile');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -106,13 +106,15 @@ const RegisterPage = () => {
     e.preventDefault();
     const { fullName, email, password, confirmPassword, state, district, city, address, phone } = formData;
     if (!fullName || !email || !password || !confirmPassword || !state || !district || !city || !address || !phone) {
-      setError("Please fill all fields.");
+      toast.warn("Please fill all fields.");
       return;
     }
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      toast.warn("Passwords do not match.");
       return;
     }
+
+    setLoading(true);
 
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
@@ -127,20 +129,21 @@ const RegisterPage = () => {
       }
 
       localStorage.setItem('token', data.token);
+      toast.success('Account created successfully!');
       navigate("/profile");
     } catch (err) {
       console.error(err);
       if (err.message === 'Failed to fetch') {
-        setError("Cannot connect to server. Is the backend running?");
+        toast.error("Cannot connect to server. Is the backend running?");
       } else {
-        setError(err.message);
+        toast.error(err.message);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSocialLogin = async (provider) => {
-    setError("Social login not supported in this version yet.");
-  };
+  // handleSocialLogin is integrated into GoogleLogin/FacebookLogin components
 
   return (
     <>
@@ -171,7 +174,9 @@ const RegisterPage = () => {
             <input type="text" name="address" placeholder="Address" onChange={handleChange} />
             <input type="password" name="password" placeholder="Password" onChange={handleChange} />
             <input type="password" name="confirmPassword" placeholder="Confirm Password" onChange={handleChange} />
-            <button type="submit">Register</button>
+            <button type="submit" disabled={loading}>
+              {loading ? 'Creating Account...' : 'Register'}
+            </button>
           </form>
 
           <div className="social-login">
@@ -179,7 +184,7 @@ const RegisterPage = () => {
             <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
               <GoogleLogin
                 onSuccess={credentialResponse => handleSocialSuccess('google', credentialResponse)}
-                onError={() => setError('Google Registration Failed')}
+                onError={() => toast.error('Google Registration Failed')}
                 useOneTap
               />
             </GoogleOAuthProvider>
@@ -192,7 +197,7 @@ const RegisterPage = () => {
                 }}
                 onFail={(error) => {
                   console.log('Registration Failed!', error);
-                  setError('Facebook Registration Failed');
+                   toast.error('Facebook Registration Failed');
                 }}
                 style={{
                   backgroundColor: '#4267b2',
@@ -210,7 +215,7 @@ const RegisterPage = () => {
             </div>
           </div>
 
-          {error && <p className="error">{error}</p>}
+          {/* {error && <p className="error">{error}</p>} */}
         </div>
       </div>
 

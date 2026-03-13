@@ -9,8 +9,8 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
-const auth = require('../middleware/auth');
-const admin = require('../middleware/admin');
+const { verifyToken, authorizeRoles } = require('../middleware/auth');
+const admin = require('../middleware/admin'); // Kept for legacy if needed, but RBAC is preferred
 
 // Cloudinary Config
 // Cloudinary Config - Keep this
@@ -30,7 +30,7 @@ const upload = multer({
 const { classifyImage } = require('../utils/imageClassifier');
 
 // Create Report
-router.post('/', auth, (req, res) => {
+router.post('/', verifyToken, (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
             console.error("Multer error:", err);
@@ -50,29 +50,35 @@ router.post('/', auth, (req, res) => {
         }
 
         // --- IMAGE CLASSIFICATION CHECK ---
-        if (category === 'street_light') {
+        const categoryMap = {
+            'street_light': ['street', 'light', 'lamp', 'lantern', 'spotlight', 'pole', 'night'],
+            'garbage': ['garbage', 'trash', 'waste', 'litter', 'rubbish', 'plastic', 'dump', 'pile'],
+            'pothole': ['pothole', 'crack', 'road', 'asphalt', 'hole', 'pavement', 'street'],
+            'drainage': ['drain', 'water', 'flood', 'pipe', 'sewage', 'gutter', 'leak'],
+            'stray_animal': ['dog', 'cat', 'cow', 'animal', 'stray', 'wildlife', 'pet']
+        };
+
+        const relevantKeywords = categoryMap[category] || [];
+        
+        if (relevantKeywords.length > 0) {
             try {
-                console.log("Analyzing image for Broken Streetlight report...");
+                console.log(`Analyzing image for ${category} report...`);
                 const predictions = await classifyImage(req.file.buffer);
                 console.log("AI Predictions:", predictions);
 
-                // Check if any prediction matches relevant keywords
-                // We use a broader list to be safe: 'light', 'lamp', 'pole'
-                const validKeywords = ['street', 'light', 'lamp', 'lantern', 'spotlight', 'pole'];
                 const isRelevant = predictions.some(p =>
-                    validKeywords.some(keyword => p.className.toLowerCase().includes(keyword))
+                    relevantKeywords.some(keyword => p.className.toLowerCase().includes(keyword))
                 );
 
                 if (!isRelevant) {
-                    console.log("Image rejected significantly.");
+                    console.log(`Image rejected for category ${category}.`);
                     return res.status(400).json({
-                        msg: `Image rejected. Please upload a photo of a Streetlight. Cloud thinks this is: ${predictions[0].className}`
+                        msg: `Image rejected. Please upload a photo relevant to ${category.replace('_', ' ')}. AI detected: ${predictions[0].className}`
                     });
                 }
-                console.log("Image accepted as Streetlight.");
+                console.log(`Image accepted for ${category}.`);
             } catch (aiError) {
                 console.error("AI Classification failed, allowing upload as fallback:", aiError);
-                // Fallback: Proceed if AI fails (don't block user due to server error)
             }
         }
         // ----------------------------------
@@ -97,11 +103,22 @@ router.post('/', auth, (req, res) => {
         try {
             const result = await uploadToCloudinary(req.file.buffer);
 
+            // Automated department assignment based on category
+            const deptMap = {
+                'garbage': 'sanitation',
+                'street_light': 'electricity',
+                'pothole': 'roads',
+                'drainage': 'drainage',
+                'stray_animal': 'general',
+                'other': 'general'
+            };
+
             const newReport = new Report({
                 userId: req.user.id,
                 category,
+                department: deptMap[category] || 'general',
                 description,
-                imageUrl: result.secure_url, // Use the URL from Cloudinary result
+                imageUrl: result.secure_url,
                 location: loc
             });
 
@@ -115,7 +132,7 @@ router.post('/', auth, (req, res) => {
 });
 
 // Get User Reports
-router.get('/user', auth, async (req, res) => {
+router.get('/user', verifyToken, async (req, res) => {
     try {
         const reports = await Report.find({ userId: req.user.id }).sort({ timestamp: -1 });
         res.json(reports);
@@ -139,10 +156,10 @@ router.get('/', async (req, res) => {
 // --- ADMIN ROUTES ---
 
 // Get All Reports (Admin Only)
-router.get('/admin/all', [auth, admin], async (req, res) => {
+router.get('/admin/all', [verifyToken, authorizeRoles('admin')], async (req, res) => {
     try {
         const reports = await Report.find()
-            .populate('userId', 'fullName email phone') // Get user details
+            .populate('userId', 'fullName email phone')
             .sort({ timestamp: -1 });
         res.json(reports);
     } catch (err) {
@@ -151,22 +168,29 @@ router.get('/admin/all', [auth, admin], async (req, res) => {
     }
 });
 
-// Update Report Status & Remarks (Admin Only)
-router.put('/admin/:id', [auth, admin], async (req, res) => {
-    const { status, remarks } = req.body;
+// Update Report (Admin/Municipality/NGO)
+router.put('/:id', [verifyToken, authorizeRoles('admin', 'municipality', 'ngo')], async (req, res) => {
+    const { status, remarks, department, assignedTo } = req.body;
     try {
         let report = await Report.findById(req.params.id);
         if (!report) return res.status(404).json({ msg: 'Report not found' });
 
+        // Municipality can only update reports in their department
+        if (req.user.role === 'municipality' && report.department !== req.user.department) {
+            return res.status(403).json({ msg: 'Not authorized to update reports outside your department' });
+        }
+
         if (status) report.status = status;
         if (remarks) report.remarks = remarks;
+        if (department && req.user.role === 'admin') report.department = department;
+        if (assignedTo && req.user.role === 'admin') report.assignedTo = assignedTo;
+        
         if (status === 'resolved' && !report.resolvedAt) {
             report.resolvedAt = Date.now();
 
-            // Create Notification for User
             const notification = new Notification({
                 userId: report.userId,
-                message: `Good news! Your report regarding '${report.category}' has been resolved. Remarks: ${remarks || 'None'}`,
+                message: `Your report regarding '${report.category}' has been resolved.`,
                 reportId: report._id
             });
             await notification.save();
@@ -174,6 +198,38 @@ router.put('/admin/:id', [auth, admin], async (req, res) => {
 
         await report.save();
         res.json(report);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- MUNICIPALITY ROUTES ---
+
+router.get('/dept/assigned', [verifyToken, authorizeRoles('municipality')], async (req, res) => {
+    try {
+        const reports = await Report.find({ department: req.user.department })
+            .populate('userId', 'fullName email phone')
+            .sort({ timestamp: -1 });
+        res.json(reports);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- NGO ROUTES ---
+
+router.get('/ngo/available', [verifyToken, authorizeRoles('ngo')], async (req, res) => {
+    try {
+        // NGOs see community-related issues that are pending
+        const reports = await Report.find({ 
+            category: { $in: ['stray_animal', 'garbage', 'other'] },
+            status: 'pending'
+        })
+        .populate('userId', 'fullName email phone')
+        .sort({ timestamp: -1 });
+        res.json(reports);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

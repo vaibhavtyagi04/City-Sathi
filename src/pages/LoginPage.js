@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import FacebookLogin from '@greatsumini/react-facebook-login';
+import { toast } from 'react-toastify';
 
 const GOOGLE_CLIENT_ID = "704438813882-r2nieunde5dd2dovpnjkpmg0q7r4evii.apps.googleusercontent.com"; // Replace with actual ID
 const FACEBOOK_APP_ID = "YOUR_FACEBOOK_APP_ID"; // Replace with actual ID
@@ -14,7 +15,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -36,14 +37,16 @@ const LoginPage = () => {
       if (!res.ok) throw new Error(result.msg || 'Social login failed');
 
       localStorage.setItem('token', result.token);
+      toast.success('Login successful!');
       navigate('/profile');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
@@ -62,20 +65,24 @@ const LoginPage = () => {
 
       if (isAdminLogin) {
         if (data.user?.role === 'admin') {
+          toast.success('Welcome Admin!');
           navigate('/admin');
         } else {
-          setError('Access Denied: You do not have admin privileges.');
+          toast.error('Access Denied: You do not have admin privileges.');
           localStorage.removeItem('token');
         }
       } else {
+        toast.success('Login successful!');
         navigate('/profile');
       }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
-        setError("Cannot connect to server. Is the backend running?");
+        toast.error("Cannot connect to server. Is the backend running?");
       } else {
-        setError(err.message);
+        toast.error(err.message);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,7 +99,7 @@ const LoginPage = () => {
             <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
               <GoogleLogin
                 onSuccess={credentialResponse => handleSocialSuccess('google', credentialResponse)}
-                onError={() => setError('Google Login Failed')}
+                onError={() => toast.error('Google Login Failed')}
                 useOneTap
               />
             </GoogleOAuthProvider>
@@ -105,7 +112,7 @@ const LoginPage = () => {
                 }}
                 onFail={(error) => {
                   console.log('Login Failed!', error);
-                  setError('Facebook Login Failed');
+                   toast.error('Facebook Login Failed');
                 }}
                 style={{
                   backgroundColor: '#4267b2',
@@ -168,7 +175,7 @@ const LoginPage = () => {
               </label>
             </div>
 
-            {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+            {/* {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>} */}
 
             <div style={styles.optionsRow}>
               <label>
@@ -177,7 +184,9 @@ const LoginPage = () => {
               <a href="/forgot-password" style={styles.link}>Forgot Password?</a>
             </div>
 
-            <button type="submit" style={styles.loginButton}>Login</button>
+            <button type="submit" style={styles.loginButton} disabled={loading}>
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
           </form>
 
           <p style={styles.footerText}>

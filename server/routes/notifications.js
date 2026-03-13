@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth');
 const Notification = require('../models/Notification');
 
 // Get all notifications for the logged-in user
-router.get('/', auth, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
         const notifications = await Notification.find({ userId: req.user.id })
             .sort({ createdAt: -1 });
@@ -16,7 +16,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Mark a notification as read
-router.put('/:id/read', auth, async (req, res) => {
+router.put('/:id/read', verifyToken, async (req, res) => {
     try {
         let notification = await Notification.findById(req.params.id);
         if (!notification) return res.status(404).json({ msg: 'Notification not found' });
@@ -36,7 +36,7 @@ router.put('/:id/read', auth, async (req, res) => {
 });
 
 // Mark all as read
-router.put('/mark-all-read', auth, async (req, res) => {
+router.put('/mark-all-read', verifyToken, async (req, res) => {
     try {
         await Notification.updateMany({ userId: req.user.id, isRead: false }, { isRead: true });
         res.json({ msg: 'All marked as read' });

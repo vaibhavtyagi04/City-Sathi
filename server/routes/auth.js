@@ -22,10 +22,16 @@ router.post('/register', async (req, res) => {
 
         await user.save();
 
-        const payload = { user: { id: user.id } };
+        const payload = { 
+            user: { 
+                id: user.id,
+                role: user.role,
+                department: user.department 
+            } 
+        };
         jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
             if (err) throw err;
-            res.json({ token });
+            res.json({ token, user: { id: user.id, role: user.role, department: user.department } });
         });
     } catch (err) {
         console.error(err.message);
@@ -43,10 +49,16 @@ router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ msg: 'Invalid Credentials' });
 
-        const payload = { user: { id: user.id } };
+        const payload = { 
+            user: { 
+                id: user.id,
+                role: user.role,
+                department: user.department 
+            } 
+        };
         jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
             if (err) throw err;
-            res.json({ token, user: { id: user.id, role: user.role } });
+            res.json({ token, user: { id: user.id, role: user.role, department: user.department } });
         });
     } catch (err) {
         console.error(err.message);
@@ -96,10 +108,16 @@ const socialLogin = async (res, email, fullName, googleId, facebookId) => {
             await user.save();
         }
 
-        const payload = { user: { id: user.id } };
+        const payload = { 
+            user: { 
+                id: user.id,
+                role: user.role,
+                department: user.department 
+            } 
+        };
         jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
             if (err) throw err;
-            res.json({ token });
+            res.json({ token, user: { id: user.id, role: user.role, department: user.department } });
         });
     } catch (err) {
         console.error(err.message);

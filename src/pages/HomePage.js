@@ -12,19 +12,18 @@ function HomePage() {
 
       {/* Hero Section */}
       <section className="hero-section">
-        <div className="hero-overlay">
+        <div className="hero-content">
           <h1 className="hero-title">
-            Make Your City <span>Cleaner & Smarter</span>
+            Report Civic Issues in Your <span>City Instantly</span>
           </h1>
           <p className="hero-subtitle">
-            CitySathi empowers citizens to take action by reporting local issues like
-            <strong> potholes, broken streetlights, stray animals, drainage problems, and garbage collection </strong>.
-            Track progress, stay updated, and be part of the solution for a better tomorrow. 🌍
+            Upload a photo, auto-detect location, and track issue resolution. 
+            Join us in making your community cleaner and safer.
           </p>
 
           <div className="hero-buttons">
-            <Link to="/report" className="btn-primary">🚀 Get Started</Link>
-            <Link to="/about" className="btn-outline">📖 Learn More</Link>
+            <Link to="/report" className="btn-primary">🚀 Report Issue</Link>
+            <Link to="/reports" className="btn-outline">📊 View Dashboard</Link>
           </div>
         </div>
       </section>

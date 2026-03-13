@@ -1,0 +1,155 @@
+.ngo-dashboard {
+    min-height: 100vh;
+    background: #f0fdf4; /* Light green for NGO theme */
+}
+
+.ngo-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 20px;
+}
+
+.ngo-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.ngo-header h1 {
+    font-size: 32px;
+    color: #166534;
+    margin-bottom: 8px;
+}
+
+.ngo-header p {
+    color: #4ade80;
+    font-size: 18px;
+}
+
+.ngo-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.ngo-tabs button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 30px;
+    background: #e2e8f0;
+    color: #64748b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.ngo-tabs button.active {
+    background: #166534;
+    color: white;
+    box-shadow: 0 4px 12px rgba(22, 101, 52, 0.2);
+}
+
+.ngo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.ngo-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s;
+}
+
+.ngo-card:hover { transform: translateY(-5px); }
+
+.card-image {
+    position: relative;
+    height: 200px;
+}
+
+.card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.category-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(4px);
+}
+
+.status-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.pending { background: #fef3c7; color: #92400e; }
+.status-badge.resolved { background: #dcfce7; color: #166534; }
+.status-badge.in-review { background: #e0e7ff; color: #3730a3; }
+
+.card-body {
+    padding: 20px;
+}
+
+.location {
+    font-size: 13px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.card-body h3 {
+    font-size: 16px;
+    color: #1e293b;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+}
+
+.btn-claim, .btn-resolve {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-claim { background: #166534; color: white; }
+.btn-claim:hover { background: #14532d; }
+
+.btn-resolve { background: #10b981; color: white; }
+.btn-resolve:hover { background: #059669; }
+
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px;
+    color: #94a3b8;
+    font-size: 18px;
+}

@@ -8,14 +8,24 @@ import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
+const CATEGORY_ICONS = {
+    garbage: '#e53e3e',       // Red
+    stray_animal: '#ed8936',  // Orange
+    street_light: '#ecc94b',  // Yellow
+    pothole: '#48bb78',       // Green (or mixed)
+    drainage: '#4299e1',      // Blue
+    other: '#a0aec0'          // Gray
+};
 
-L.Marker.prototype.options.icon = DefaultIcon;
+const getCustomIcon = (category) => {
+    const color = CATEGORY_ICONS[category] || '#3182ce';
+    return L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+};
 
 const LiveMap = () => {
     const [reports, setReports] = useState([]);
@@ -40,22 +50,28 @@ const LiveMap = () => {
     const position = [28.6692, 77.4538];
 
     return (
-        <MapContainer center={position} zoom={13} style={{ height: "400px", width: "100%", borderRadius: "10px" }}>
+        <MapContainer center={position} zoom={13} style={{ height: "500px", width: "100%", borderRadius: "20px" }}>
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {reports.map((report) => (
-                <Marker key={report._id} position={[report.location.lat, report.location.lng]}>
+                <Marker 
+                    key={report._id} 
+                    position={[report.location.lat, report.location.lng]}
+                    icon={getCustomIcon(report.category)}
+                >
                     <Popup>
-                        <div style={{ textAlign: "center" }}>
-                            <strong>{report.category}</strong><br />
-                            <p style={{ margin: "5px 0", fontSize: "12px" }}>{report.description.substring(0, 50)}...</p>
+                        <div style={{ textAlign: "center", minWidth: "150px" }}>
+                            <strong style={{ textTransform: "uppercase", fontSize: "14px", color: CATEGORY_ICONS[report.category] }}>
+                                {report.category.replace('_', ' ')}
+                            </strong>
+                            <p style={{ margin: "8px 0", fontSize: "13px", color: "#4a5568" }}>{report.description.substring(0, 60)}...</p>
                             {report.imageUrl && (
                                 <img
-                                    src={report.imageUrl.startsWith('http') ? report.imageUrl : `http://localhost:5000${report.imageUrl}`}
+                                    src={report.imageUrl}
                                     alt="Report"
-                                    style={{ width: "100px", height: "70px", objectFit: "cover", borderRadius: "5px" }}
+                                    style={{ width: "100%", height: "100px", objectFit: "cover", borderRadius: "8px" }}
                                 />
                             )}
                         </div>

@@ -14,6 +14,8 @@ import Footer from "../components/Footer";
 import "./ReportPage.css";
 import report from "../assets/report.jpg";
 import { API_URL } from "../config";
+import { toast } from "react-toastify";
+import imageCompression from 'browser-image-compression';
 
 const ADD_WATERMARK = true; // Feature flag
 
@@ -108,13 +110,27 @@ export default function ReportPage() {
     }
     const processFile = async () => {
       try {
-        const watermarkedFile = await addWatermark(file, location, address);
+        setSubmitting(true);
+        setError("Compressing image...");
+        
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1280,
+          useWebWorker: true
+        };
+        
+        const compressedFile = await imageCompression(file, options);
+        const watermarkedFile = await addWatermark(compressedFile, location, address);
+        
         setImage(watermarkedFile);
         setImagePreview(URL.createObjectURL(watermarkedFile));
         setError("");
       } catch (err) {
-        console.error("Watermark error:", err);
+        console.error("Processing error:", err);
         setError("Error processing image.");
+        toast.error("Failed to process image");
+      } finally {
+        setSubmitting(false);
       }
     };
 
@@ -290,13 +306,14 @@ export default function ReportPage() {
 
       setUploadProgress(100);
       setSuccess(true);
+      toast.success('Report submitted — thank you!');
       setTimeout(() => {
         navigate("/reports");
       }, 1500);
 
     } catch (err) {
       console.error("Submit error:", err);
-      setError("Failed to submit report. " + err.message);
+      toast.error("Failed to submit report. " + err.message);
       setSubmitting(false);
       setUploadProgress(0);
     }
