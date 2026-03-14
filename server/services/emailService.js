@@ -1,4 +1,9 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force Node to prefer IPv4 over IPv6 when resolving hostnames.
+// Render often returns IPv6 for Google SMTP which gets blocked (ENETUNREACH).
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
@@ -60,7 +65,7 @@ async function sendOTP(email, otp) {
 
           <!-- Footer -->
           <div style="background:#f8fafc; padding:20px; text-align:center; font-size:12px; color:#777;">
-            <p style="margin:0;">CitySathi – Empowering citizens to improve their city.</p>
+            <p style="margin:0;">CitySathi - Empowering citizens to improve their city.</p>
             <p style="margin:5px 0;">If you didn't request this OTP, please ignore this email.</p>
           </div>
 
