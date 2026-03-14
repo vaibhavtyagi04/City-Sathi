@@ -9,8 +9,13 @@ const ReportSchema = new mongoose.Schema({
     },
     department: { 
         type: String, 
-        enum: ['sanitation', 'roads', 'electricity', 'drainage', 'general'],
+        enum: ['sanitation', 'roads', 'electricity', 'drainage', 'general', 'ngo'],
         default: 'general'
+    },
+    priority: {
+        type: String,
+        enum: ['High', 'Medium', 'Low'],
+        default: 'Medium'
     },
     description: { type: String, required: true },
     imageUrl: { type: String, required: true },
@@ -21,12 +26,20 @@ const ReportSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['pending', 'in-review', 'resolved', 'rejected'],
-        default: 'pending' 
+        enum: ['submitted', 'acknowledged', 'in_progress', 'resolved', 'rejected', 'pending', 'in-review'],
+        default: 'submitted' 
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    publicUrl: { type: String },
+    tweetId: { type: String },
+    escalationLevel: { type: Number, default: 0 },
+    lastStatusUpdate: { type: Date, default: Date.now },
     resolutionProofUrl: { type: String },
     remarks: { type: String },
+    aiDetectedCategory: { type: String },
+    aiConfidence: { type: Number },
+    aiVerified: { type: Boolean, default: false },
+    aiGeneratedDescription: { type: String },
     resolvedAt: { type: Date },
     timestamp: { type: Date, default: Date.now }
 });

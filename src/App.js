@@ -13,6 +13,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import MunicipalityDashboard from './dashboards/MunicipalityDashboard';
 import NgoDashboard from './dashboards/NgoDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import IssuePublicPage from './pages/IssuePublicPage';
 
 function App() {
   return (
@@ -21,10 +22,32 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/report" element={<ReportPage />} />
-        <Route path="/reports" element={<UserDashboard />} />
+        <Route path="/issues/:id" element={<IssuePublicPage />} />
+        <Route
+          path="/report"
+          element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <ReportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/register" element={<RegisterPage />} /> {/* Register route */}
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
         <Route path='/about' element={<About />} />
         <Route
           path="/admin"

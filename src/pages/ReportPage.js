@@ -6,7 +6,9 @@ import {
   FiLoader,
   FiUploadCloud,
   FiCamera,
-  FiX
+  FiX,
+  FiCpu,
+  FiAlertTriangle
 } from "react-icons/fi";
 import Webcam from "react-webcam";
 import Navbar from "../components/Navbar";
@@ -42,6 +44,11 @@ export default function ReportPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // AI Prediction State
+  const [aiPrediction, setAiPrediction] = useState(null); // { category, confidence }
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [aiVerified, setAiVerified] = useState(false);
+
   // Camera State
   const [showCamera, setShowCamera] = useState(false);
   const webcamRef = React.useRef(null);
@@ -54,16 +61,18 @@ export default function ReportPage() {
         .then(async blob => {
           const file = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
 
-          // Apply watermark
           const watermarkedFile = await addWatermark(file, location, address);
 
           setImage(watermarkedFile);
           setImagePreview(URL.createObjectURL(watermarkedFile));
           setShowCamera(false);
           setError("");
+          
+          // Trigger AI Prediction
+          runAiPrediction(watermarkedFile);
         });
     }
-  }, [webcamRef]);
+  }, [webcamRef, location, address]);
 
   // Auto-detect location
   useEffect(() => {
@@ -125,6 +134,10 @@ export default function ReportPage() {
         setImage(watermarkedFile);
         setImagePreview(URL.createObjectURL(watermarkedFile));
         setError("");
+        
+        // Trigger AI Prediction
+        runAiPrediction(watermarkedFile);
+
       } catch (err) {
         console.error("Processing error:", err);
         setError("Error processing image.");
@@ -135,6 +148,51 @@ export default function ReportPage() {
     };
 
     processFile();
+  };
+
+  const runAiPrediction = async (fileToAnalyze) => {
+    try {
+      setIsPredicting(true);
+      setAiPrediction(null);
+      setAiVerified(false);
+      
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('image', fileToAnalyze);
+      
+      const res = await fetch(`${API_URL}/ai/predict`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': token
+        },
+        body: formData
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        
+        // If confidence is extremely low (< 5%), we treat it as an unconfident match
+        if (data.confidence > 0.05) {
+            setAiPrediction(data);
+            
+            // If very confident, suggest the category immediately and inject the description
+            if (data.confidence > 0.1 && data.category !== 'other') {
+                setCategory(data.category);
+                
+                // Only overwrite description if the user hasn't typed a custom one yet, 
+                // or if it's currently empty
+                if (!description.trim()) {
+                    setDescription(data.description || '');
+                }
+            }
+        }
+      }
+    } catch (err) {
+      console.error("AI Prediction failed silently:", err);
+      // We don't want to block the user if AI fails, just degrade gracefully
+    } finally {
+      setIsPredicting(false);
+    }
   };
 
   const addWatermark = (file, loc, addr) => {
@@ -290,6 +348,18 @@ export default function ReportPage() {
         lng: location?.lng,
         address: address,
       }));
+      
+      // Append AI feedback data
+      if (aiPrediction) {
+          formData.append('aiDetectedCategory', aiPrediction.category);
+          formData.append('aiConfidence', aiPrediction.confidence);
+          // If the submitted category matches the AI's highest confidence category, it's AI verified
+          formData.append('aiVerified', category === aiPrediction.category ? 'true' : 'false');
+          // Attach the system description if it generated one
+          if (aiPrediction.description) {
+              formData.append('aiGeneratedDescription', aiPrediction.description);
+          }
+      }
 
       const res = await fetch(`${API_URL}/reports`, {
         method: 'POST',
@@ -394,7 +464,35 @@ export default function ReportPage() {
               />
             )}
 
-            {/* IMAGE UPLOAD (click or drag-drop) */}
+            {/* CAMERA MODAL */}
+            {showCamera && (
+              <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'relative', background: '#000', padding: '10px', borderRadius: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCamera(false)}
+                    style={{ position: 'absolute', top: '-40px', right: '0', background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
+                  >
+                    <FiX />
+                  </button>
+                  <Webcam
+                    audio={false}
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    videoConstraints={{ facingMode: "environment" }}
+                    style={{ width: '100%', maxWidth: '500px', borderRadius: '8px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={capture}
+                    style={{ width: '100%', padding: '12px', marginTop: '10px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    <FiCamera style={{ marginRight: '5px' }} /> Capture
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* IMAGE UPLOAD (click or drag-drop) */}
             <div className="upload-actions" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
               <label
@@ -431,43 +529,15 @@ export default function ReportPage() {
               </button>
             </div>
 
-            {/* CAMERA MODAL */}
-            {showCamera && (
-              <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ position: 'relative', background: '#000', padding: '10px', borderRadius: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCamera(false)}
-                    style={{ position: 'absolute', top: '-40px', right: '0', background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
-                  >
-                    <FiX />
-                  </button>
-                  <Webcam
-                    audio={false}
-                    ref={webcamRef}
-                    screenshotFormat="image/jpeg"
-                    videoConstraints={{ facingMode: "environment" }}
-                    style={{ width: '100%', maxWidth: '500px', borderRadius: '8px' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={capture}
-                    style={{ width: '100%', padding: '12px', marginTop: '10px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    <FiCamera style={{ marginRight: '5px' }} /> Capture
-                  </button>
-                </div>
-              </div>
-            )}
-
             {imagePreview && (
-              <div className="preview-wrap" style={{ position: 'relative' }}>
-                <img src={imagePreview} alt="preview" className="preview-image" />
+              <div className="preview-wrap" style={{ position: 'relative', marginBottom: "15px" }}>
+                <img src={imagePreview} alt="preview" className="preview-image" style={{ width: '100%', borderRadius: '8px' }} />
                 <button
                   type="button"
                   onClick={() => {
                     setImage(null);
                     setImagePreview(null);
+                    setAiPrediction(null);
                   }}
                   style={{
                     position: 'absolute',
@@ -487,6 +557,47 @@ export default function ReportPage() {
                 >
                   <FiX />
                 </button>
+                
+                {/* AI Prediction Overlay Box */}
+                {(isPredicting || aiPrediction) && (
+                    <div style={{ position: 'absolute', bottom: '10px', left: '10px', right: '10px', background: 'rgba(255,255,255,0.95)', padding: '12px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'flex-start', gap: '12px', backdropFilter: 'blur(4px)' }}>
+                        <div style={{ background: isPredicting ? '#ebf4ff' : aiPrediction?.confidence < 0.1 ? '#fff5f5' : '#f0fff4', color: isPredicting ? '#3182ce' : aiPrediction?.confidence < 0.1 ? '#e53e3e' : '#38a169', padding: '8px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {isPredicting ? <FiLoader className="spinner" size={20} /> : aiPrediction?.confidence < 0.1 ? <FiAlertTriangle size={20} /> : <FiCpu size={20} />}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            {isPredicting ? (
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px', color: '#2d3748' }}>Smart Vision Analysis...</p>
+                                    <p style={{ margin: 0, fontSize: '12px', color: '#718096' }}>Detecting issue severity and type.</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '14px', color: '#2d3748' }}>
+                                        {aiPrediction?.confidence < 0.1 ? 'Unclear Image Detected' : `AI Suggestion: ${(aiPrediction?.category || '').replace('_', ' ')}`}
+                                    </p>
+                                    {aiPrediction?.confidence < 0.1 ? (
+                                        <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#e53e3e', fontWeight: '500' }}>Please ensure the issue is clearly visible in the frame to help municipalities.</p>
+                                    ) : (
+                                        <div>
+                                            <p style={{ margin: '2px 0 6px 0', fontSize: '12px', color: '#718096' }}>We've auto-selected the category based on this image ({(aiPrediction?.confidence * 100).toFixed(0)}% match).</p>
+                                            {category === aiPrediction?.category ? (
+                                                <span style={{ fontSize: '11px', background: '#c6f6d5', color: '#22543d', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>Verified Match</span>
+                                            ) : (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setCategory(aiPrediction.category)}
+                                                    style={{ fontSize: '11px', background: '#edf2f7', color: '#4a5568', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}
+                                                >
+                                                    Switch to {aiPrediction.category.replace('_', ' ')}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
               </div>
             )}
 

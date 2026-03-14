@@ -11,6 +11,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
 const admin = require('../middleware/admin'); // Kept for legacy if needed, but RBAC is preferred
+const { assignDepartment } = require('../utils/departmentAssignment');
+const { getDistanceInMeters } = require('../utils/geoUtils');
+const { postComplaintTweet } = require('../services/twitterService');
 
 // Cloudinary Config
 // Cloudinary Config - Keep this
@@ -49,39 +52,8 @@ router.post('/', verifyToken, (req, res) => {
             loc = {};
         }
 
-        // --- IMAGE CLASSIFICATION CHECK ---
-        const categoryMap = {
-            'street_light': ['street', 'light', 'lamp', 'lantern', 'spotlight', 'pole', 'night'],
-            'garbage': ['garbage', 'trash', 'waste', 'litter', 'rubbish', 'plastic', 'dump', 'pile'],
-            'pothole': ['pothole', 'crack', 'road', 'asphalt', 'hole', 'pavement', 'street'],
-            'drainage': ['drain', 'water', 'flood', 'pipe', 'sewage', 'gutter', 'leak'],
-            'stray_animal': ['dog', 'cat', 'cow', 'animal', 'stray', 'wildlife', 'pet']
-        };
-
-        const relevantKeywords = categoryMap[category] || [];
-        
-        if (relevantKeywords.length > 0) {
-            try {
-                console.log(`Analyzing image for ${category} report...`);
-                const predictions = await classifyImage(req.file.buffer);
-                console.log("AI Predictions:", predictions);
-
-                const isRelevant = predictions.some(p =>
-                    relevantKeywords.some(keyword => p.className.toLowerCase().includes(keyword))
-                );
-
-                if (!isRelevant) {
-                    console.log(`Image rejected for category ${category}.`);
-                    return res.status(400).json({
-                        msg: `Image rejected. Please upload a photo relevant to ${category.replace('_', ' ')}. AI detected: ${predictions[0].className}`
-                    });
-                }
-                console.log(`Image accepted for ${category}.`);
-            } catch (aiError) {
-                console.error("AI Classification failed, allowing upload as fallback:", aiError);
-            }
-        }
-        // ----------------------------------
+        // AI check is now handled via the /api/ai/predict pre-flight route on the frontend.
+        // The user confirmed the category, so we trust it here.
 
         // Upload to Cloudinary (Stream Upload since we have buffer)
         const uploadToCloudinary = (buffer) => {
@@ -101,28 +73,69 @@ router.post('/', verifyToken, (req, res) => {
         };
 
         try {
+            // DUPLICATE DETECTION
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentReports = await Report.find({
+                category,
+                timestamp: { $gte: oneDayAgo }
+            });
+
+            let duplicateReportId = null;
+            if (loc && loc.lat && loc.lng) {
+                for (const existingReport of recentReports) {
+                    if (existingReport.location && existingReport.location.lat && existingReport.location.lng) {
+                        const distance = getDistanceInMeters(
+                            loc.lat, loc.lng,
+                            existingReport.location.lat, existingReport.location.lng
+                        );
+                        if (distance <= 50) {
+                            duplicateReportId = existingReport._id;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (duplicateReportId) {
+                return res.status(409).json({
+                    msg: 'This issue was already reported nearby recently. You can view or upvote the existing one.',
+                    existingReportId: duplicateReportId
+                });
+            }
+
             const result = await uploadToCloudinary(req.file.buffer);
 
-            // Automated department assignment based on category
-            const deptMap = {
-                'garbage': 'sanitation',
-                'street_light': 'electricity',
-                'pothole': 'roads',
-                'drainage': 'drainage',
-                'stray_animal': 'general',
-                'other': 'general'
-            };
+            const assignedDept = assignDepartment(category);
+            const priority = req.body.priority || 'Medium';
 
             const newReport = new Report({
                 userId: req.user.id,
                 category,
-                department: deptMap[category] || 'general',
+                department: assignedDept,
+                priority,
                 description,
                 imageUrl: result.secure_url,
-                location: loc
+                location: loc,
+                status: 'submitted',
+                aiDetectedCategory: req.body.aiDetectedCategory || null,
+                aiConfidence: req.body.aiConfidence || null,
+                aiVerified: req.body.aiVerified === 'true',
+                aiGeneratedDescription: req.body.aiGeneratedDescription || null
             });
 
             const report = await newReport.save();
+
+            // Generate public URL
+            report.publicUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/issues/${report._id}`;
+            await report.save();
+
+            // Trigger Twitter API auto-post
+            const tweetId = await postComplaintTweet(report);
+            if (tweetId) {
+                report.tweetId = tweetId;
+                await report.save();
+            }
+
             res.json(report);
         } catch (err) {
             console.error("Upload/Save Error:", err);
@@ -145,10 +158,26 @@ router.get('/user', verifyToken, async (req, res) => {
 // Get All Reports (Public for Map)
 router.get('/', async (req, res) => {
     try {
-        const reports = await Report.find().select('category description location imageUrl timestamp').sort({ timestamp: -1 });
+        const reports = await Report.find().select('category description location imageUrl timestamp priority status publicUrl')
+            .sort({ timestamp: -1 });
         res.json(reports);
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// Get Single Report (Public for Tracking Page)
+router.get('/public/:id', async (req, res) => {
+    try {
+        const report = await Report.findById(req.params.id).populate('userId', 'fullName');
+        if (!report) return res.status(404).json({ msg: 'Report not found' });
+        res.json(report);
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Report not found' });
+        }
         res.status(500).send('Server Error');
     }
 });
@@ -170,7 +199,7 @@ router.get('/admin/all', [verifyToken, authorizeRoles('admin')], async (req, res
 
 // Update Report (Admin/Municipality/NGO)
 router.put('/:id', [verifyToken, authorizeRoles('admin', 'municipality', 'ngo')], async (req, res) => {
-    const { status, remarks, department, assignedTo } = req.body;
+    const { status, remarks, department, assignedTo, priority, escalationLevel } = req.body;
     try {
         let report = await Report.findById(req.params.id);
         if (!report) return res.status(404).json({ msg: 'Report not found' });
@@ -184,6 +213,8 @@ router.put('/:id', [verifyToken, authorizeRoles('admin', 'municipality', 'ngo')]
         if (remarks) report.remarks = remarks;
         if (department && req.user.role === 'admin') report.department = department;
         if (assignedTo && req.user.role === 'admin') report.assignedTo = assignedTo;
+        if (priority && req.user.role === 'admin') report.priority = priority;
+        if (escalationLevel !== undefined && req.user.role === 'admin') report.escalationLevel = escalationLevel;
         
         if (status === 'resolved' && !report.resolvedAt) {
             report.resolvedAt = Date.now();
