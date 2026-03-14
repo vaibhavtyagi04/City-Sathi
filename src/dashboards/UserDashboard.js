@@ -26,6 +26,7 @@ export default function UserDashboard() {
       setFilter(location.state.filter);
     }
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
   const fetchReports = async () => {

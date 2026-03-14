@@ -19,7 +19,7 @@ import { API_URL } from "../config";
 import { toast } from "react-toastify";
 import imageCompression from 'browser-image-compression';
 
-const ADD_WATERMARK = true; // Feature flag
+// const ADD_WATERMARK = true; // Feature flag
 
 const CATEGORIES = [
   { key: "garbage", label: "Garbage" },
@@ -47,7 +47,7 @@ export default function ReportPage() {
   // AI Prediction State
   const [aiPrediction, setAiPrediction] = useState(null); // { category, confidence }
   const [isPredicting, setIsPredicting] = useState(false);
-  const [aiVerified, setAiVerified] = useState(false);
+  // const [aiVerified, setAiVerified] = useState(false);
 
   // Camera State
   const [showCamera, setShowCamera] = useState(false);
@@ -68,10 +68,10 @@ export default function ReportPage() {
           setShowCamera(false);
           setError("");
           
-          // Trigger AI Prediction
           runAiPrediction(watermarkedFile);
         });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webcamRef, location, address]);
 
   // Auto-detect location
@@ -154,7 +154,7 @@ export default function ReportPage() {
     try {
       setIsPredicting(true);
       setAiPrediction(null);
-      setAiVerified(false);
+      // setAiVerified(false);
       
       const token = localStorage.getItem('token');
       const formData = new FormData();
@@ -620,11 +620,10 @@ export default function ReportPage() {
               </p>
             )}
 
-            {/* SUBMIT */}
             <button
               className="submit-btn"
               type="submit"
-              disabled={submitting || uploadProgress > 0 && uploadProgress < 100}
+              disabled={submitting || (uploadProgress > 0 && uploadProgress < 100)}
             >
               {submitting ? (
                 <>

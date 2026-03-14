@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { FaCity, FaExclamationTriangle, FaCheckCircle, FaClock, FaCalendarAlt, FaMapMarkerAlt } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -22,6 +22,7 @@ const MunicipalityDashboard = () => {
 
     useEffect(() => {
         fetchDepartmentReports();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchDepartmentReports = async () => {

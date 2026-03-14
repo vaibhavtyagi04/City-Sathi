@@ -5,8 +5,6 @@ import { API_URL } from '../config';
 import L from 'leaflet';
 
 // Fix for default marker icon in React-Leaflet
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const CATEGORY_ICONS = {
     garbage: '#e53e3e',       // Red
