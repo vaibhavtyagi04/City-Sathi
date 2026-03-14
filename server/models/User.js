@@ -16,6 +16,8 @@ const UserSchema = new mongoose.Schema({
     password: { type: String }, // Optional for social login
     googleId: { type: String },
     facebookId: { type: String },
+    otp: { type: String },
+    otpExpires: { type: Date },
     phone: { type: String },
     state: { type: String },
     district: { type: String },
