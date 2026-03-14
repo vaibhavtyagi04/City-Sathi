@@ -31,7 +31,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/ai', require('./routes/ai'));
 
 // Database Connection
-mongoose.connect('mongodb://localhost:27017/csapp')
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/csapp')
     .then(() => {
         console.log('MongoDB connected');
         startEscalationJob();
