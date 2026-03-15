@@ -197,6 +197,38 @@ router.get('/admin/all', [verifyToken, authorizeRoles('admin')], async (req, res
     }
 });
 
+// --- MUNICIPALITY ROUTES ---
+
+router.get('/dept/assigned', [verifyToken, authorizeRoles('municipality')], async (req, res) => {
+    try {
+        const reports = await Report.find({ department: req.user.department })
+            .populate('userId', 'fullName email phone')
+            .sort({ timestamp: -1 });
+        res.json(reports);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- NGO ROUTES ---
+
+router.get('/ngo/available', [verifyToken, authorizeRoles('ngo')], async (req, res) => {
+    try {
+        // NGOs see community-related issues that are pending
+        const reports = await Report.find({ 
+            category: { $in: ['stray_animal', 'garbage', 'other'] },
+            status: 'pending'
+        })
+        .populate('userId', 'fullName email phone')
+        .sort({ timestamp: -1 });
+        res.json(reports);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // Update Report (Admin/Municipality/NGO)
 router.put('/:id', [verifyToken, authorizeRoles('admin', 'municipality', 'ngo')], async (req, res) => {
     const { status, remarks, department, assignedTo, priority, escalationLevel } = req.body;
@@ -229,38 +261,6 @@ router.put('/:id', [verifyToken, authorizeRoles('admin', 'municipality', 'ngo')]
 
         await report.save();
         res.json(report);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
-    }
-});
-
-// --- MUNICIPALITY ROUTES ---
-
-router.get('/dept/assigned', [verifyToken, authorizeRoles('municipality')], async (req, res) => {
-    try {
-        const reports = await Report.find({ department: req.user.department })
-            .populate('userId', 'fullName email phone')
-            .sort({ timestamp: -1 });
-        res.json(reports);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
-    }
-});
-
-// --- NGO ROUTES ---
-
-router.get('/ngo/available', [verifyToken, authorizeRoles('ngo')], async (req, res) => {
-    try {
-        // NGOs see community-related issues that are pending
-        const reports = await Report.find({ 
-            category: { $in: ['stray_animal', 'garbage', 'other'] },
-            status: 'pending'
-        })
-        .populate('userId', 'fullName email phone')
-        .sort({ timestamp: -1 });
-        res.json(reports);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
