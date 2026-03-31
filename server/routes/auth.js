@@ -24,7 +24,7 @@ router.post('/send-otp', async (req, res) => {
             await user.save();
         } else {
             // Create a new user automatically
-            const fullName = email.split('@')[0]; // Simple fallback for full name
+            const fullName = email.split('@')[0];
             user = new User({
                 fullName,
                 email,
@@ -34,11 +34,45 @@ router.post('/send-otp', async (req, res) => {
             await user.save();
         }
 
-        await sendOTP(email, otp);
-        res.status(200).json({ msg: 'OTP sent successfully' });
+        // CHECK FOR PRESENTATION MODE OR EMERGENCY FALLBACK
+        const isPresentationMode = process.env.PRESENTATION_MODE === 'true';
+        
+        if (isPresentationMode) {
+            console.log("PRESENTATION MODE ENABLED: Skipping real email, using 123456");
+            user.otp = '123456';
+            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+            await user.save();
+            return res.status(200).json({ 
+                msg: 'OTP sent (Presentation Mode: Use 123456)', 
+                presentation: true 
+            });
+        }
+
+        try {
+            await sendOTP(email, otp);
+            res.status(200).json({ msg: 'OTP sent successfully' });
+        } catch (mailError) {
+            console.error("Mail Service Error:", mailError);
+            
+            // EMERGENCY FALLBACK (If email fails, allow 123456 for the owner)
+            if (email === process.env.EMAIL_USER || email === 'vaibtyagi121@gmail.com') {
+                user.otp = '123456';
+                user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+                await user.save();
+                return res.status(200).json({ 
+                    msg: 'Email service unavailable. Using emergency OTP: 123456', 
+                    debug: mailError.message 
+                });
+            }
+            
+            res.status(500).json({ 
+                msg: 'Email service connection timeout. Please contact admin or use presentation mode.',
+                error: mailError.message 
+            });
+        }
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Database/Auth Error:", err);
+        res.status(500).json({ msg: 'Server Error: ' + err.message });
     }
 });
 
