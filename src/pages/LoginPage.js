@@ -1,75 +1,46 @@
 import { useState } from 'react';
 import Navbar from '../components/Navbar';
 import loginbg from '../assets/log.jpg';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import { toast } from 'react-toastify';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSendOTP = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email) {
-      toast.warn('Please enter your email');
+    if (!email || !password) {
+      toast.warn('Please enter email and password');
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/send-otp`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, password })
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.msg || 'Failed to send OTP');
-      }
-
-      toast.success('OTP sent successfully!');
-      setOtpSent(true);
-    } catch (err) {
-      if (err.message === 'Failed to fetch') {
-        toast.error("Cannot connect to server. Is the backend running?");
-      } else {
-        toast.error(err.message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    if (!otp) {
-      toast.warn('Please enter the OTP');
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/auth/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, otp })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.msg || 'Invalid OTP');
+        throw new Error(data.msg || 'Login failed');
       }
 
       localStorage.setItem('token', data.token);
       toast.success('Login successful!');
-      navigate('/profile');
+      
+      // Redirect based on role if needed, or just to profile
+      if (data.user.role === 'admin') {
+          navigate('/admin');
+      } else {
+          navigate('/profile');
+      }
     } catch (err) {
       if (err.message === 'Failed to fetch') {
         toast.error("Cannot connect to server. Is the backend running?");
@@ -89,56 +60,34 @@ const LoginPage = () => {
         <div style={styles.loginBox}>
           <h2 style={styles.title}>CitySathi Login</h2>
 
-          {!otpSent ? (
-            <form style={styles.form} onSubmit={handleSendOTP}>
-              <label>Email</label>
-              <input
-                type="email"
-                placeholder="Enter email"
-                style={styles.input}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <button type="submit" style={styles.loginButton} disabled={loading}>
-                {loading ? 'Sending OTP...' : 'Send OTP'}
-              </button>
-            </form>
-          ) : (
-            <form style={styles.form} onSubmit={handleVerifyOTP}>
-              <label>Email</label>
-              <input
-                type="email"
-                style={{...styles.input, backgroundColor: '#eee', cursor: 'not-allowed'}}
-                value={email}
-                disabled
-              />
-              
-              <label>OTP</label>
-              <input
-                type="text"
-                placeholder="Enter 6-digit OTP"
-                style={styles.input}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-              />
+          <form style={styles.form} onSubmit={handleLogin}>
+            <label>Email</label>
+            <input
+              type="email"
+              placeholder="Enter email"
+              style={styles.input}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            
+            <label>Password</label>
+            <input
+              type="password"
+              placeholder="Enter password"
+              style={styles.input}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-              <button type="submit" style={styles.loginButton} disabled={loading}>
-                {loading ? 'Verifying...' : 'Verify OTP'}
-              </button>
-              
-              <p style={styles.resendText}>
-                Didn't receive OTP?{' '}
-                <span style={styles.link} onClick={handleSendOTP}>
-                  Resend
-                </span>
-              </p>
-            </form>
-          )}
+            <button type="submit" style={styles.loginButton} disabled={loading}>
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
 
           <p style={styles.footerText}>
-            No password required. A secure OTP will be sent to your email.
+            Don't have an account? <Link to="/register" style={styles.link}>Sign up here</Link>
           </p>
         </div>
       </div>

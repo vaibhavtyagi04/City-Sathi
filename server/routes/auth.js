@@ -7,90 +7,25 @@ const generateOTP = require('../utils/generateOTP');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
-// Send OTP
-router.post('/send-otp', async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ msg: 'Email is required' });
+const bcrypt = require('bcryptjs');
 
-    try {
-        const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-        let user = await User.findOne({ email });
-        
-        if (user) {
-            user.otp = otp;
-            user.otpExpires = otpExpires;
-            await user.save();
-        } else {
-            // Create a new user automatically
-            const fullName = email.split('@')[0];
-            user = new User({
-                fullName,
-                email,
-                otp,
-                otpExpires
-            });
-            await user.save();
-        }
-
-        // CHECK FOR PRESENTATION MODE OR EMERGENCY FALLBACK
-        const isPresentationMode = process.env.PRESENTATION_MODE === 'true';
-        
-        if (isPresentationMode) {
-            console.log("PRESENTATION MODE ENABLED: Skipping real email, using 123456");
-            user.otp = '123456';
-            user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-            await user.save();
-            return res.status(200).json({ 
-                msg: 'OTP sent (Presentation Mode: Use 123456)', 
-                presentation: true 
-            });
-        }
-
-        try {
-            await sendOTP(email, otp);
-            res.status(200).json({ msg: 'OTP sent successfully' });
-        } catch (mailError) {
-            console.error("Mail Service Error:", mailError);
-            
-            // EMERGENCY FALLBACK (If email fails, allow 123456 for the owner)
-            if (email === process.env.EMAIL_USER || email === 'vaibtyagi121@gmail.com') {
-                user.otp = '123456';
-                user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-                await user.save();
-                return res.status(200).json({ 
-                    msg: 'Email service unavailable. Using emergency OTP: 123456', 
-                    debug: mailError.message 
-                });
-            }
-            
-            res.status(500).json({ 
-                msg: 'Email service connection timeout. Please contact admin or use presentation mode.',
-                error: mailError.message 
-            });
-        }
-    } catch (err) {
-        console.error("Database/Auth Error:", err);
-        res.status(500).json({ msg: 'Server Error: ' + err.message });
+// Register User
+router.post('/register', async (req, res) => {
+    const { fullName, email, password } = req.body;
+    if (!fullName || !email || !password) {
+        return res.status(400).json({ msg: 'Please enter all fields' });
     }
-});
-
-// Verify OTP
-router.post('/verify-otp', async (req, res) => {
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ msg: 'Email and OTP are required' });
 
     try {
         let user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ msg: 'User not found' });
+        if (user) return res.status(400).json({ msg: 'User already exists' });
 
-        if (user.otp !== otp) return res.status(400).json({ msg: 'Invalid OTP' });
-        if (user.otpExpires < new Date()) return res.status(400).json({ msg: 'OTP has expired' });
+        user = new User({ fullName, email, password });
 
-        // Clear OTP after successful verification
-        user.otp = undefined;
-        user.otpExpires = undefined;
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+
         await user.save();
 
         const payload = { 
@@ -102,12 +37,52 @@ router.post('/verify-otp', async (req, res) => {
         };
         jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
             if (err) throw err;
-            res.json({ token, user: { id: user.id, role: user.role, department: user.department } });
+            res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role } });
         });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
+});
+
+// Login User
+router.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ msg: 'Please enter all fields' });
+    }
+
+    try {
+        let user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ msg: 'Invalid Credentials' });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ msg: 'Invalid Credentials' });
+
+        const payload = { 
+            user: { 
+                id: user.id,
+                role: user.role,
+                department: user.department 
+            } 
+        };
+        jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
+            if (err) throw err;
+            res.json({ token, user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, department: user.department } });
+        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// Deprecated OTP routes (Keeping for backward compatibility during transition)
+router.post('/send-otp', async (req, res) => {
+    res.status(410).json({ msg: 'OTP service is deprecated. Please use Email/Password login.' });
+});
+
+router.post('/verify-otp', async (req, res) => {
+    res.status(410).json({ msg: 'OTP service is deprecated. Please use Email/Password login.' });
 });
 
 // Get User (Me)
